@@ -11,7 +11,10 @@
 #include <dlfcn.h>
 #include <mach-o/dyld.h>
 #include <unistd.h>
+#include <TargetConditionals.h>
+#if !TARGET_OS_IPHONE
 #include <libproc.h>
+#endif
 #include <sys/types.h>
 #include <climits>
 
@@ -31,11 +34,23 @@ inline std::string GetModuleFileName(ModuleHandle aHandle)
     if (!aHandle)
     {
         // Get main executable path
+#if TARGET_OS_IPHONE
+        // CyPort: the game folder is in the app's Documents; the shim reports its pretend macOS executable path.
+        {
+            using PathFn = int (*)(char*, uint32_t*);
+            static auto shimPath = reinterpret_cast<PathFn>(dlsym(RTLD_DEFAULT, "MSGameExecutablePath"));
+            char buf[PATH_MAX];
+            uint32_t n = sizeof(buf);
+            if (shimPath && shimPath(buf, &n) == 0)
+                return buf;
+        }
+#else
         char path[PROC_PIDPATHINFO_MAXSIZE];
         if (proc_pidpath(getpid(), path, sizeof(path)) > 0)
         {
             return path;
         }
+#endif
         
         // Fallback: use _NSGetExecutablePath
         char exePath[PATH_MAX];
